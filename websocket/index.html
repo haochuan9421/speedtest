@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Speedtest Via WebSocket</title>
+  </head>
+  <body>
+    <button onclick="latency(event)">Test Latency</button>
+    <button onclick="download(event)">Test Download Speed</button>
+    <button onclick="upload(event)">Test Upload Speed</button>
+
+    <script>
+      async function socketReady(socket) {
+        if (socket.bufferedAmount === 0) {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 0));
+        return socketReady(socket);
+      }
+
+      function createReadableStream(second) {
+        const millisecond = second * 1000;
+        let start = 0;
+        return new ReadableStream({
+          pull(controller) {
+            if (start === 0) {
+              start = Date.now();
+            }
+            if (Date.now() - start > millisecond) {
+              controller.close();
+              return;
+            }
+            controller.enqueue(new Uint8Array(65536));
+          },
+        });
+      }
+
+      function latency(event) {
+        const socket = new WebSocket("/latency");
+        socket.onopen = () => {
+          socket.send(Date.now());
+          socket.onmessage = (ev) => {
+            const el = document.createElement("h3");
+            el.innerText = `Latency: ${Date.now() - ev.data} ms`;
+            document.body.appendChild(el);
+            socket.close();
+          };
+        };
+      }
+
+      function download(event) {
+        const socket = new WebSocket("/download");
+        socket.binaryType = "arraybuffer";
+        socket.onopen = () => {
+          const start = Date.now();
+          let receivedTotal = 0;
+          let receivedInSecond = 0;
+
+          socket.onmessage = (ev) => {
+            receivedInSecond += ev.data.byteLength;
+            receivedTotal += ev.data.byteLength;
+          };
+
+          const timer = setInterval(() => {
+            const el = document.createElement("p");
+            el.innerText = `Download Speed: ${(
+              receivedInSecond /
+              2 ** 20
+            ).toFixed(2)} MiB/s`;
+            document.body.appendChild(el);
+            receivedInSecond = 0;
+          }, 1000);
+
+          socket.onclose = (ev) => {
+            clearInterval(timer);
+            const el = document.createElement("h3");
+            el.innerText = `Average Download Speed: ${(
+              receivedTotal /
+              2 ** 20 /
+              ((Date.now() - start) / 1000)
+            ).toFixed(2)} MiB/s`;
+            document.body.appendChild(el);
+          };
+
+          socket.onerror = (ev) => {
+            clearInterval(timer);
+            console.log("error", ev);
+          };
+        };
+      }
+
+      function upload(event) {
+        const socket = new WebSocket("/upload");
+        socket.onopen = async () => {
+          const start = Date.now();
+          let sendedTotal = 0;
+          let sendedInSecond = 0;
+
+          const timer = setInterval(() => {
+            const el = document.createElement("p");
+            el.innerText = `Upload Speed: ${(sendedInSecond / 2 ** 20).toFixed(
+              2
+            )} MiB/s`;
+            document.body.appendChild(el);
+            sendedInSecond = 0;
+          }, 1000);
+
+          try {
+            // for-await-of 在客户端可能有兼容性问题
+            const source = createReadableStream(10);
+            const reader = source.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                break;
+              }
+              socket.send(value);
+              await socketReady(socket);
+              sendedTotal += value.byteLength;
+              sendedInSecond += value.byteLength;
+            }
+            const el = document.createElement("h3");
+            el.innerText = `Average Upload Speed: ${(
+              sendedTotal /
+              2 ** 20 /
+              ((Date.now() - start) / 1000)
+            ).toFixed(2)} MiB/s`;
+            document.body.appendChild(el);
+          } catch (error) {
+            console.log("Error: ", error);
+          } finally {
+            clearInterval(timer);
+            socket.close();
+          }
+        };
+      }
+    </script>
+  </body>
+</html>
