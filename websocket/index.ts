@@ -29,59 +29,64 @@ function createReadableStream(second: number) {
   });
 }
 
-Deno.serve((req) => {
-  if (req.headers.get("upgrade") != "websocket") {
-    return new Response(
-      Deno.readFileSync(new URL("./index.html", import.meta.url))
-    );
-  }
+Deno.serve(
+  {
+    hostname: "::",
+  },
+  (req) => {
+    if (req.headers.get("upgrade") != "websocket") {
+      return new Response(
+        Deno.readFileSync(new URL("./index.html", import.meta.url))
+      );
+    }
 
-  const path = new URL(req.url).pathname;
-  console.log(path);
+    const path = new URL(req.url).pathname;
+    console.log(path);
 
-  if (path === "/download") {
-    const { socket, response } = Deno.upgradeWebSocket(req);
-    socket.onopen = async () => {
-      try {
-        const source = createReadableStream(10);
-        console.time();
-        for await (const chunk of source) {
-          socket.send(chunk);
-          await socketReady(socket);
+    if (path === "/download") {
+      const { socket, response } = Deno.upgradeWebSocket(req);
+      socket.onopen = async () => {
+        try {
+          const source = createReadableStream(10);
+          console.time();
+          for await (const chunk of source) {
+            socket.send(chunk);
+            await socketReady(socket);
+          }
+          console.timeEnd();
+        } catch (error) {
+          console.log("Error: ", error);
+        } finally {
+          socket.close();
         }
-        console.timeEnd();
-      } catch (error) {
-        console.log("Error: ", error);
-      } finally {
-        socket.close();
-      }
-    };
-    return response;
-  }
+      };
+      return response;
+    }
 
-  if (path === "/upload") {
-    const { socket, response } = Deno.upgradeWebSocket(req);
-    socket.binaryType = "arraybuffer";
-    socket.onopen = () => {
-      const start = Date.now();
-      let receivedTotal = 0;
+    if (path === "/upload") {
+      const { socket, response } = Deno.upgradeWebSocket(req);
+      socket.binaryType = "arraybuffer";
+      socket.onopen = () => {
+        const start = Date.now();
+        let receivedTotal = 0;
+        socket.onmessage = (ev) => {
+          receivedTotal += ev.data.byteLength;
+        };
+        socket.onclose = () => {
+          console.log(receivedTotal, Date.now() - start);
+        };
+      };
+      return response;
+    }
+
+    if (path === "/latency") {
+      const { socket, response } = Deno.upgradeWebSocket(req);
       socket.onmessage = (ev) => {
-        receivedTotal += ev.data.byteLength;
+        socket.send(ev.data);
       };
-      socket.onclose = () => {
-        console.log(receivedTotal, Date.now() - start);
-      };
-    };
-    return response;
-  }
+      return response;
+    }
 
-  if (path === "/latency") {
-    const { socket, response } = Deno.upgradeWebSocket(req);
-    socket.onmessage = (ev) => {
-      socket.send(ev.data);
-    };
-    return response;
+    return new Response(null, { status: 501 });
   }
-
-  return new Response(null, { status: 501 });
-});
+);
