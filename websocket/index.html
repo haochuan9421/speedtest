@@ -36,21 +36,26 @@
         });
       }
 
+      const prefix = `${location.protocol === "https:" ? "wss:" : "ws:"}//${
+        location.host
+      }`;
+
       function latency(event) {
-        const socket = new WebSocket("/latency");
+        const socket = new WebSocket(`${prefix}/latency`);
         socket.onopen = () => {
           socket.send(Date.now());
           socket.onmessage = (ev) => {
             const el = document.createElement("h3");
             el.innerText = `Latency: ${Date.now() - ev.data} ms`;
             document.body.appendChild(el);
+            el.scrollIntoView();
             socket.close();
           };
         };
       }
 
       function download(event) {
-        const socket = new WebSocket("/download");
+        const socket = new WebSocket(`${prefix}/download`);
         socket.binaryType = "arraybuffer";
         socket.onopen = () => {
           const start = Date.now();
@@ -69,6 +74,7 @@
               2 ** 20
             ).toFixed(2)} MiB/s`;
             document.body.appendChild(el);
+            el.scrollIntoView();
             receivedInSecond = 0;
           }, 1000);
 
@@ -81,6 +87,7 @@
               ((Date.now() - start) / 1000)
             ).toFixed(2)} MiB/s`;
             document.body.appendChild(el);
+            el.scrollIntoView();
           };
 
           socket.onerror = (ev) => {
@@ -91,7 +98,7 @@
       }
 
       function upload(event) {
-        const socket = new WebSocket("/upload");
+        const socket = new WebSocket(`${prefix}/upload`);
         socket.onopen = async () => {
           const start = Date.now();
           let sendedTotal = 0;
@@ -103,6 +110,7 @@
               2
             )} MiB/s`;
             document.body.appendChild(el);
+            el.scrollIntoView();
             sendedInSecond = 0;
           }, 1000);
 
@@ -127,6 +135,7 @@
               ((Date.now() - start) / 1000)
             ).toFixed(2)} MiB/s`;
             document.body.appendChild(el);
+            el.scrollIntoView();
           } catch (error) {
             console.log("Error: ", error);
           } finally {
