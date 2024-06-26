@@ -4,7 +4,7 @@
 // 如果有类似 Node.js 可写流的 "drain" 事件就好了，我尝试通过 Object.defineProperty 定义一个 bufferedAmount 的 setter
 // 但是无论是定义在 WebSocket 实例上还是原形链上都不会触发，所以暂时只能这样的，等后面 WebSocketStream 正式发布就好了，那时候才能比较完美的支持背压
 async function socketReady(socket: WebSocket) {
-  if (socket.bufferedAmount === 0) {
+  if (socket.bufferedAmount < 4194304) {
     return;
   }
   await new Promise((r) => setTimeout(r, 0));

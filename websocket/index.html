@@ -12,7 +12,7 @@
 
     <script>
       async function socketReady(socket) {
-        if (socket.bufferedAmount === 0) {
+        if (socket.bufferedAmount < 4194304) {
           return;
         }
         await new Promise((r) => setTimeout(r, 0));
